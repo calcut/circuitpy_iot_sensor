@@ -1,6 +1,8 @@
 import time
 import alarm
 from circuitpy_mcu.mcu import Mcu
+from circuitpy_mcu.ota_bootloader import reset, enable_watchdog
+
 import adafruit_htu31d
 import analogio
 import board
@@ -14,13 +16,14 @@ import adafruit_logging as logging
 import traceback
 
 __version__ = "0.0.0-auto.0"
-# __repo__ = "https://github.com/calcut/circuitpy-septic_tank"
-# __filename__ = "septic_tank.py"
+__repo__ = "https://github.com/calcut/circuitpy-iot_sensor"
+__filename__ = "iot_sensor.py"
 
 # Set AIO = True to use Wifi and Adafruit IO connection
 # secrets.py file needs to be setup appropriately
-# AIO = True
-AIO = False
+AIO = True
+# AIO = False
+AIO_GROUP = 'greenhouse'
 
 def main():
 
@@ -30,9 +33,6 @@ def main():
         '0x0B' : 'Battery Monitor LC709203', # Built into ESP32S2 feather 
         '0x40' : 'Temp/Humidity HTU31D',
         '0x41' : 'Temp/Humidity HTU31D',
-        # '0x68' : 'Realtime Clock PCF8523', # On Adalogger Featherwing
-        # '0x72' : 'Sparkfun LCD Display',
-        # '0x77' : 'Temp/Humidity/Pressure BME280' # Built into some ESP32S2 feathers 
     }
 
     # instantiate the MCU helper class to set up the system
@@ -41,9 +41,6 @@ def main():
     # Choose minimum logging level to process
     mcu.log.setLevel(logging.INFO) #i.e. ignore DEBUG messages
 
-    # Check what devices are present on the i2c bus
-    # mcu.i2c_identify(i2c_dict)
-
     # instantiate i2c devices
     try:
         htu1 = adafruit_htu31d.HTU31D(mcu.i2c, address=0x40)
@@ -51,7 +48,7 @@ def main():
         mcu.log.info(f'found HTU31D at 0x40')
 
     except Exception as e:
-        mcu.log_exception(e)
+        mcu.handle_exception(e)
         mcu.pixel[0] = mcu.pixel.RED
 
     try:
@@ -60,18 +57,17 @@ def main():
         mcu.log.info(f'found HTU31D at 0x41')
 
     except Exception as e:
-        mcu.log_exception(e)
+        mcu.handle_exception(e)
         mcu.pixel[0] = mcu.pixel.RED
-    # mcu.attach_sdcard()
-    # mcu.archive_file('log.txt')
-    # mcu.archive_file('data.txt')
+    
+    
     soil_sensor = analogio.AnalogIn(board.A0)
     battery_monitor = LC709203F(mcu.i2c)
     battery_monitor.pack_size = PackSize.MAH1000
 
     if AIO:
-        mcu.wifi_connect()
-        mcu.aio_setup(log_feed=None)
+        mcu.wifi.connect()
+        mcu.aio_setup(aio_group=f'{AIO_GROUP}-{mcu.id}')
 
     def deepsleep(duration):
         # Create a an alarm that will trigger 20 seconds from now.
@@ -81,51 +77,33 @@ def main():
         # Exit the program, and then deep sleep until the alarm wakes us.
         alarm.exit_and_deep_sleep_until_alarms(time_alarm)
 
-    def publish_feeds():
-        # AIO limits to 30 data points per minute in the free version
-        # Set publish interval accordingly
-        feeds = {}
-        if mcu.aio_connected:
-            feeds['greenhouse.temperature'] = round(htu1.temperature, 2)
-            feeds['greenhouse.humidity'] = round(htu1.relative_humidity, 2)
-            feeds['greenhouse.soil'] = 100* soil_sensor.value // 65536
-            feeds['outside.temperature'] = round(htu2.temperature, 2)
-            feeds['outside.humidity'] = round(htu2.relative_humidity, 2)
-            mcu.aio_send(feeds)
-
 
     while True:
         print(f'{battery_monitor.cell_percent=}')
         print(f'{battery_monitor.cell_voltage=}')
         print(f'{100* soil_sensor.value // 65536}')
-        time.sleep(1)
-        mcu.watchdog.feed()
-    mcu.aio_receive()
+        mcu.watchdog_feed()
 
-    publish_feeds()
+        feeds = {}
+        feeds['inside-temperature'] = round(htu1.temperature, 2)
+        feeds['inside-humidity'] = round(htu1.relative_humidity, 2)
+        feeds['soil'] = 100* soil_sensor.value // 65536
+        feeds['outside-temperature'] = round(htu2.temperature, 2)
+        feeds['outside-humidity'] = round(htu2.relative_humidity, 2)
+        if AIO:
+            mcu.aio_sync(data_dict=feeds, publish_interval=10)
+        time.sleep(1)
+
+
     deepsleep(900)   #15 minutes
 
 if __name__ == "__main__":
     try:
+        enable_watchdog(timeout=60)
         main()
     except KeyboardInterrupt:
         print('Code Stopped by Keyboard Interrupt')
-        # May want to add code to stop gracefully here 
-        # e.g. turn off relays or pumps
-        
-    except WatchDogTimeout:
-        print('Code Stopped by WatchDog Timeout!')
-        # supervisor.reload()
-        # NB, sometimes soft reset is not enough! need to do hard reset here
-        print('Performing hard reset in 15s')
-        time.sleep(15)
-        microcontroller.reset()
 
     except Exception as e:
         print(f'Code stopped by unhandled exception:')
-        print(traceback.format_exception(None, e, e.__traceback__))
-        # Can we log here?
-        print('Performing a hard reset in 15s')
-        time.sleep(15) #Make sure this is shorter than watchdog timeout
-        # supervisor.reload()
-        microcontroller.reset()
+        reset(e)
