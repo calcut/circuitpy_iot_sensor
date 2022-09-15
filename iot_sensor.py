@@ -39,7 +39,7 @@ def main():
     mcu = Mcu()
 
     # Choose minimum logging level to process
-    mcu.log.setLevel(logging.INFO) #i.e. ignore DEBUG messages
+    mcu.log.setLevel(logging.DEBUG) #i.e. ignore DEBUG messages
 
     # instantiate i2c devices
     try:
@@ -68,6 +68,8 @@ def main():
     if AIO:
         mcu.wifi.connect()
         mcu.aio_setup(aio_group=f'{AIO_GROUP}-{mcu.id}')
+        mcu.aio.log.setLevel(logging.DEBUG) #i.e. ignore DEBUG messages
+
 
     def deepsleep(duration):
         # Create a an alarm that will trigger 20 seconds from now.
@@ -79,19 +81,18 @@ def main():
 
 
     while True:
-        print(f'{battery_monitor.cell_percent=}')
-        print(f'{battery_monitor.cell_voltage=}')
-        print(f'{100* soil_sensor.value // 65536}')
         mcu.watchdog_feed()
 
         feeds = {}
+        feeds['battery-voltage'] = round(battery_monitor.cell_voltage, 3)
+        feeds['battery-percent'] = round(battery_monitor.cell_percent, 3)
         feeds['inside-temperature'] = round(htu1.temperature, 2)
         feeds['inside-humidity'] = round(htu1.relative_humidity, 2)
         feeds['soil'] = 100* soil_sensor.value // 65536
         feeds['outside-temperature'] = round(htu2.temperature, 2)
         feeds['outside-humidity'] = round(htu2.relative_humidity, 2)
         if AIO:
-            mcu.aio_sync(data_dict=feeds, publish_interval=10)
+            mcu.aio_sync(data_dict=feeds, publish_interval=30)
         time.sleep(1)
 
 
