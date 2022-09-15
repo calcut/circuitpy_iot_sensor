@@ -15,7 +15,7 @@ import microcontroller
 import adafruit_logging as logging
 import traceback
 
-__version__ = "1.0.0-rc1"
+__version__ = "1.0.0-rc2"
 __repo__ = "https://github.com/calcut/circuitpy-iot_sensor"
 __filename__ = "iot_sensor.py"
 
@@ -73,7 +73,7 @@ def main():
     def deepsleep(duration):
         # Create a an alarm that will trigger 20 seconds from now.
         time_alarm = alarm.time.TimeAlarm(monotonic_time=time.monotonic() + duration)
-        mcu.log.warning(f'about to deep sleep for {duration}s')
+        mcu.log.warning(f'{__version__} about to deep sleep for {duration}s')
         mcu.i2c_power_off()
         mcu.led.value = False
         # Exit the program, and then deep sleep until the alarm wakes us.
@@ -105,7 +105,7 @@ def main():
                         supervisor.set_next_code_file(code, reload_on_success=False)
                         supervisor.reload()
                     else:
-                        deepsleep(10) #15 minutes
+                        deepsleep(900) #15 minutes
             time.sleep(1)
     
 
