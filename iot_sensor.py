@@ -69,21 +69,20 @@ def main():
         mcu.wifi.connect()
         mcu.aio_setup(aio_group=f'{AIO_GROUP}-{mcu.id}')
         mcu.aio.log.setLevel(logging.DEBUG) #i.e. ignore DEBUG messages
-        mcu.aio.get('ota')
-
 
     def deepsleep(duration):
         # Create a an alarm that will trigger 20 seconds from now.
         time_alarm = alarm.time.TimeAlarm(monotonic_time=time.monotonic() + duration)
         mcu.log.warning(f'about to deep sleep for {duration}s')
         mcu.i2c_power_off()
+        mcu.led.value = False
         # Exit the program, and then deep sleep until the alarm wakes us.
         alarm.exit_and_deep_sleep_until_alarms(time_alarm)
 
 
     while True:
         mcu.watchdog_feed()
-
+        
         feeds = {}
         feeds['battery-voltage'] = round(battery_monitor.cell_voltage, 3)
         feeds['battery-percent'] = round(battery_monitor.cell_percent, 3)
@@ -93,6 +92,7 @@ def main():
         feeds['outside-temperature'] = round(htu2.temperature, 2)
         feeds['outside-humidity'] = round(htu2.relative_humidity, 2)
         if AIO:
+            mcu.aio.get('ota')
             mcu.aio_sync(data_dict=feeds, publish_interval=30)
             for feed_id in mcu.aio.updated_feeds.keys():
                 payload = mcu.aio.updated_feeds.pop(feed_id)
