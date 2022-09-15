@@ -69,6 +69,7 @@ def main():
         mcu.wifi.connect()
         mcu.aio_setup(aio_group=f'{AIO_GROUP}-{mcu.id}')
         mcu.aio.log.setLevel(logging.DEBUG) #i.e. ignore DEBUG messages
+        mcu.aio.get('ota')
 
 
     def deepsleep(duration):
@@ -93,10 +94,21 @@ def main():
         feeds['outside-humidity'] = round(htu2.relative_humidity, 2)
         if AIO:
             mcu.aio_sync(data_dict=feeds, publish_interval=30)
-        time.sleep(1)
+            for feed_id in mcu.aio.updated_feeds.keys():
+                payload = mcu.aio.updated_feeds.pop(feed_id)
+                print(f'parsing {feed_id=} {payload=}')
 
-
-    deepsleep(900)   #15 minutes
+                if feed_id == 'ota':
+                    if payload != __version__:
+                        mcu.log.warning('New OTA Version, updating now')
+                        code = '/circuitpy_iot_sensor/get_ota.py'
+                        supervisor.set_next_code_file(code, reload_on_success=False)
+                        supervisor.reload()
+                    else:
+                        mcu.log.warning('No new Version, deepsleeping for 900s')
+                        deepsleep(10) #15 minutes
+            time.sleep(1)
+    
 
 if __name__ == "__main__":
     try:
