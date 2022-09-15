@@ -15,7 +15,7 @@ import microcontroller
 import adafruit_logging as logging
 import traceback
 
-__version__ = "0.0.0-auto.0"
+__version__ = "1.0.0-rc1"
 __repo__ = "https://github.com/calcut/circuitpy-iot_sensor"
 __filename__ = "iot_sensor.py"
 
@@ -105,7 +105,6 @@ def main():
                         supervisor.set_next_code_file(code, reload_on_success=False)
                         supervisor.reload()
                     else:
-                        mcu.log.warning('No new Version, deepsleeping for 900s')
                         deepsleep(10) #15 minutes
             time.sleep(1)
     
